@@ -1,5 +1,105 @@
 # PDDL support - What's new?
 
+## 2.28.2
+
+Additional :job-scheduling syntax injection for time step size.
+
+## 2.28.0
+
+Updated the [solver.planning.domains](https://solver.planning.domains) default planner to the new Planning-as-a-service api.
+
+## 2.27.2
+
+3rd party library updates.
+
+## 2.27.1
+
+Fixed parsing of the planning-as-a-service (and planutils) planner manifests.
+
+## 2.27.0
+
+### Secured communication with planning.domains server
+
+We switched to `https` for communication with the planning.domain servers (solver, editor).
+
+### Planning-as-a-service client
+
+Planning-as-a-service deployed at <https://paas-uom.org> is now one of the built-in planners.
+
+For planners that support additional switches, the argument values may be sent directly from VS Code using a temp file that is displayed while launching the planner.
+
+![Planning-as-a-service](https://raw.githubusercontent.com/wiki/jan-dolejsi/vscode-pddl/img/planning-as-a-service.gif)
+
+### Job scheduling injection
+
+The code injection to domains listing the `:job-scheduling` requirement now also includes the `contains` predicate to capture parent-child hierarchical relationships for topological locations.
+
+```lisp
+(contains ?parent ?child - location)
+```
+
+## 2.26.0 [ICAPS23](https://icaps23.icaps-conference.org/) celebratory release
+
+Welcome to ICAPS 2023 whether you are here in Prague, attending virtually, or catching up later.
+
+This version supports our [KEPS workshop paper](https://icaps23.icaps-conference.org/program/workshops/keps/KEPS-23_paper_4664.pdf)
+and the [system demo](https://icaps23.icaps-conference.org/program/demos/#3913).
+
+## 2.25.9 experimental support for scheduling solvers
+
+## 2.25.7 `:job-scheduling` proposed PDDL syntax extension
+
+To support our [ICAPS23 KEPS workshop](https://icaps23.icaps-conference.org/program/workshops/keps/) workshop paper,
+we've implemented the PDDL code compilation for scheduling problems. More about that, if our paper gets accepted : ]
+
+## 2.25.2 fix from donyazz
+
+Fix in the jinja2 templating Python code thanks to donyazz [#141](https://github.com/jan-dolejsi/vscode-pddl/pull/141). Thank you.
+
+## 2.25.0 and Happy New Year, planning community
+
+### Planutil server support
+
+Install the [planutils](https://pypi.org/project/planutils/) if you are on a Linux-like envoirnment or can activate the WSL Windows Subsystem for Linux (as mentioned below). You will have a whole bunch  of planners suddenly at your fingertips.
+
+![Planutils server](https://raw.githubusercontent.com/wiki/jan-dolejsi/vscode-pddl/img/planutils-server.gif)
+
+#### Installing `planutils`
+
+If you are on a linux-based environment, or use WSL on Windows, follow these steps to install [`planutils`](https://pypi.org/project/planutils/) there.
+
+If you can run `docker` on your system, [follow the instructions for Docker](https://pypi.org/project/planutils/).
+
+If you can just use Python, here is what you need to do:
+
+```bash
+pip install planutils
+planutils setup
+planutils activate
+```
+
+if `planutils` does not seem to be available, refresh the bash context to read in the updated `path`.
+
+Instally any planner you want, e.g. ...
+
+```bash
+planutils install lama
+```
+
+Start the service. (replicating what [Docker would do for you automatically](https://github.com/AI-Planning/planutils/blob/main/environments/server/Dockerfile)):
+
+```bash
+pip install flask
+
+planutils server --port 5555
+```
+
+Add a planner of the type _Planutils server_ and keep the address as suggested `http://localhost:5555/package`. Plan. Enjoy.
+
+### Bracket-pairing guide lines
+
+Guide lines between colored bracket pairs help readability of poorly formatted PDDL code.
+
 ## 2.24.0
 
 ### WSL Windows Subsystem for Linux support
@@ -1008,7 +1108,7 @@ The tree/chart was not responding to clicking on the Search Debugger helpful act
 
 ### Planning.Domains sessions
 
-The online [Planning.Domains](http://editor.planning.domains) editor has a concept of a session. _Session Details_ pane shows links to open the session online / offline. The _offline_ links are handled by VS Code, if installed.
+The online [Planning.Domains](https://editor.planning.domains) editor has a concept of a session. _Session Details_ pane shows links to open the session online / offline. The _offline_ links are handled by VS Code, if installed.
 
 There are two ways to get started:
 

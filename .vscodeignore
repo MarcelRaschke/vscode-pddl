@@ -22,10 +22,11 @@ todo.md
 coverage/
 .nyc_output/
 .github/
-downloadVisJs.js
 how_to_contribute.md
 
 views/common/node_modules
+!views/common/node_modules/vis-network/dist/vis-network.min.js
+!views/common/node_modules/vis-network/styles/vis-network.min.css
 
 views/searchview/node_modules
 views/searchview/out-test 
@@ -38,3 +39,9 @@ views/planview/out-test
 views/planview/src
 views/planview/test 
 views/planview/tsconfig.json
+
+views/modelView/node_modules
+views/modelView/src
+views/modelView/test
+views/modelView/tsconfig.json
+views/modelView/.npmrc

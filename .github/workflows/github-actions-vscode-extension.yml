@@ -13,16 +13,16 @@ jobs:
     
     strategy:
       matrix:
-        node-version: [14.18]
-        os: [windows-latest, ubuntu-20.04] # macos-latest, 
-      # fail-fast: false
+        node-version: [20]
+        os: [windows-latest, ubuntu-22.04] # macos-latest, 
+      fail-fast: false
 
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
 
@@ -33,34 +33,32 @@ jobs:
 
       - name: Run extension integration tests in head-less VS Code
         if: success()
-        uses: GabrielBB/xvfb-action@v1.0
+        uses: coactions/setup-xvfb@v1
         with:
           run: npm test
 
       - name: Package extension
         if: success()
         run: | 
-          npm install -g vsce
-          vsce package
+          npx vsce package
 
   publish:
     needs: build
     runs-on: ubuntu-latest
     if: success() && github.ref == 'refs/heads/master'
     steps:
-      - uses: actions/checkout@v2
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v1
+      - uses: actions/checkout@v4
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
         with:
-          node-version: 14.18
+          node-version: 20
 
       - name: NPM Install
         run: npm install
 
       - name: Publish extension to marketplace
         run: | 
-          npm install -g vsce
-          vsce publish -p $VSCE_TOKEN
+          npx vsce publish -p $VSCE_TOKEN
         env: 
           VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
         continue-on-error: true

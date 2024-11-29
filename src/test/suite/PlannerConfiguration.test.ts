@@ -13,6 +13,7 @@ import { plannersConfiguration, codePddlWorkspaceForTests } from '../../extensio
 import { PlannerConfigurationScope, CONF_PLANNERS, CONF_SELECTED_PLANNER } from '../../configuration/PlannersConfiguration';
 import { PDDL_PLANNER, EXECUTABLE_OR_SERVICE, EXECUTABLE_OPTIONS, CONF_PDDL } from '../../configuration/configuration';
 import { fail } from 'assert';
+import { PreviewPlanningAsAServiceProvider } from '../../configuration/plannerConfigurations';
 
 suite('Planner configuration test', () => {
 
@@ -30,6 +31,8 @@ suite('Planner configuration test', () => {
 		await clearConfiguration();
 	});
 
+	const outOfTheBoxPlanners = 1;
+
 	test('Default planners are returned in blank configuration', () => {
 		const wf = assertDefined(workspace.workspaceFolders, "workspace folders")[0];
 
@@ -37,11 +40,11 @@ suite('Planner configuration test', () => {
 		const planners = plannersConfiguration.getPlanners(wf);
 
 		// THEN
-		expect(planners).to.have.lengthOf(1);
+		expect(planners).to.have.lengthOf(outOfTheBoxPlanners);
 		const defaultPlanner = planners[0];
 		expect(defaultPlanner).to.not.be.undefined;
 		expect(defaultPlanner.scope).to.equal(PlannerConfigurationScope.Default);
-		expect(defaultPlanner.configuration.url).to.equal('http://solver.planning.domains/solve');
+		expect(defaultPlanner.configuration.url).to.equal('https://solver.planning.domains:5001/package');
 	});
 
 	test('Creates a user-level planner', async () => {
@@ -57,7 +60,7 @@ suite('Planner configuration test', () => {
 		const selectedPlanner = plannersConfiguration.getSelectedPlanner(wf);
 
 		// THEN
-		expect(planners).to.have.lengthOf(2);
+		expect(planners).to.have.lengthOf(outOfTheBoxPlanners + 1);
 		const userPlanners = planners.filter(spc => spc.scope === PlannerConfigurationScope.User);
 		expect(userPlanners).to.have.lengthOf(1);
 		const createdPlanner = userPlanners[0];
@@ -93,7 +96,7 @@ suite('Planner configuration test', () => {
 
 		// THEN
 		expect(workspaceFolderPlanners).to.have.lengthOf(1);
-		expect(allPlanners).to.have.lengthOf(2);
+		expect(allPlanners).to.have.lengthOf(outOfTheBoxPlanners + 1);
 		const createdPlanner = allPlanners[0];
 		expect(createdPlanner).to.not.be.undefined;
 		expect(createdPlanner.scope).to.equal(PlannerConfigurationScope.WorkspaceFolder);
@@ -207,7 +210,7 @@ suite('Planner configuration test', () => {
 		const postSelectedPlanner = plannersConfiguration.getSelectedPlanner(wf);
 
 		expect(workspaceFolderPlanners).to.have.lengthOf(1);
-		expect(allPlanners).to.have.lengthOf(2);
+		expect(allPlanners).to.have.lengthOf(outOfTheBoxPlanners + 1);
 		const actualUpdatedPlanner = workspaceFolderPlanners[0];
 		expect(actualUpdatedPlanner).to.not.be.undefined;
 		expect(actualUpdatedPlanner.path).to.not.be.undefined;
@@ -274,7 +277,7 @@ suite('Planner configuration test', () => {
 		expect(legacyPlanner, "migrated legacy executable should be removed").to.equal('');
 		expect(workspace.getConfiguration(PDDL_PLANNER).get(EXECUTABLE_OPTIONS)).to.equal('', "migrated legacy executable syntax should be removed");
 		const migratedPlanners = plannersConfiguration.getPlanners();
-		expect(migratedPlanners).to.have.lengthOf(2);
+		expect(migratedPlanners).to.have.lengthOf(outOfTheBoxPlanners + 1);
 		const migratedPlanner = migratedPlanners[0];
 		expect(migratedPlanner).to.not.be.undefined;
 		expect(migratedPlanner.scope).to.equal(PlannerConfigurationScope.User);
@@ -284,7 +287,7 @@ suite('Planner configuration test', () => {
 	});
 
 	test('Migrates deprecated planner service configuration', async () => {
-		const executable = 'http://solver.planning.domains/solve';
+		const executable = 'https://solver.planning.domains/solve';
 
 		// GIVEN
 		await workspace.getConfiguration(PDDL_PLANNER).update(EXECUTABLE_OR_SERVICE, executable, ConfigurationTarget.Global);
@@ -296,12 +299,12 @@ suite('Planner configuration test', () => {
 		expect(workspace.getConfiguration(PDDL_PLANNER).get(EXECUTABLE_OR_SERVICE)).to.equal('', "migrated legacy executable should be removed");
 		expect(workspace.getConfiguration(PDDL_PLANNER).get(EXECUTABLE_OPTIONS)).to.equal('', "migrated legacy executable syntax should be removed");
 		const migratedPlanners = plannersConfiguration.getPlanners();
-		expect(migratedPlanners).to.have.lengthOf(2);
+		expect(migratedPlanners).to.have.lengthOf(outOfTheBoxPlanners + 1);
 		const migratedPlanner = migratedPlanners[0];
 		expect(migratedPlanner).to.not.be.undefined;
 		expect(migratedPlanner.scope).to.equal(PlannerConfigurationScope.User);
 		expect(migratedPlanner.configuration.url).to.equal(executable);
-		expect(migratedPlanner.configuration.title).to.equal(executable + ' #2');
+		expect(migratedPlanner.configuration.title).to.equal(executable);
 	});
 
 
@@ -325,4 +328,27 @@ suite('Planner configuration test', () => {
 		expect(migratedPlanner.url).to.equal(executable);
 		expect(migratedPlanner.title).to.equal(executable);
 	});
+
+	
+	test('Migrates deprecated planning-as-a-service configuration', async () => {
+		const executable = 'https://solver.planning.domains/solve';
+
+		// GIVEN
+		const legacyProvider = new PreviewPlanningAsAServiceProvider([]);
+		const legacyConfiguration = legacyProvider.createPlannerConfiguration('https://mock-as-a-service/');
+		await plannersConfiguration.addPlannerConfiguration(PlannerConfigurationScope.User, legacyConfiguration);
+		await workspace.getConfiguration(PDDL_PLANNER).update(EXECUTABLE_OR_SERVICE, executable, ConfigurationTarget.Global);
+
+		const previewConfigsBefore = plannersConfiguration.getPlanners().filter(p => p.configuration.kind === legacyProvider.kind.kind);
+
+		expect(previewConfigsBefore, 'preview configs before').to.have.length.greaterThanOrEqual(1);
+
+		// WHEN
+		await plannersConfiguration.migrateLegacyConfiguration();
+
+		// THEN
+		const previewConfigsAfter = plannersConfiguration.getPlanners().filter(p => p.configuration.kind === legacyProvider.kind.kind);
+		expect(previewConfigsAfter, 'preview configs after').to.have.length(previewConfigsBefore.length);
+	});
+
 });

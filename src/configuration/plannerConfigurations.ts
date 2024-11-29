@@ -8,13 +8,15 @@ import * as http from 'http';
 import { URL } from 'url';
 import * as os from 'os';
 import * as path from 'path';
-import { Uri, window } from 'vscode';
+import { Uri, commands, window, workspace } from 'vscode';
 
 import { planner, OutputAdaptor, utils } from 'pddl-workspace';
 import { isHttp } from '../utils';
 import { PlannerExecutable } from '../planning/PlannerExecutable';
 import { AsyncServiceConfiguration, PlannerAsyncService, PlannerSyncService, PlannerPackagePreviewService } from 'pddl-planning-service-client';
 import { LongRunningPlannerProvider } from './plannerExecution';
+import { exists } from 'pddl-workspace/dist/utils/asyncfs';
+import { SchedulingService } from './SchedulingService';
 
 export class CommandPlannerProvider implements planner.PlannerProvider {
     get kind(): planner.PlannerKind {
@@ -90,16 +92,16 @@ export class CommandPlannerProvider implements planner.PlannerProvider {
     }
 }
 
-export class PlanningAsAServiceProvider extends LongRunningPlannerProvider {
+export class PlanutilsServerProvider extends LongRunningPlannerProvider {
     get kind(): planner.PlannerKind {
-        return planner.WellKnownPlannerKind.PLANNING_AS_A_SERVICE_PREVIEW;
+        return new planner.PlannerKind('planutils_server');
     }
     getNewPlannerLabel(): string {
-        return "$(package) Planning-as-a-service (preview) URL...";
+        return "$(package) Planutils server URL...";
     }
 
     async configurePlanner(previousConfiguration?: planner.PlannerConfiguration): Promise<planner.PlannerConfiguration | undefined> {
-        const existingValue = previousConfiguration?.url ?? "http://45.113.232.43/package";
+        const existingValue = previousConfiguration?.url ?? "http://localhost:5555/package";
 
         const existingUri = Uri.parse(existingValue);
         const indexOf = existingValue.indexOf(existingUri.authority);
@@ -131,7 +133,7 @@ export class PlanningAsAServiceProvider extends LongRunningPlannerProvider {
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     showHelp(_output: OutputAdaptor): void {
-        throw new Error("Method not implemented."); // possibly show a page like http://45.113.232.43/docs/lama
+        throw new Error("Method not implemented."); // possibly show a page like https://paas-uom.org/docs/lama
     }
 
     /** Custom `Planner` implementation. */
@@ -176,6 +178,99 @@ export class PlanningAsAServiceProvider extends LongRunningPlannerProvider {
     }
 }
 
+export class PlanningAsAServiceProvider extends LongRunningPlannerProvider {
+    get kind(): planner.PlannerKind {
+        return planner.WellKnownPlannerKind.PLANNING_AS_A_SERVICE;
+    }
+    getNewPlannerLabel(): string {
+        return "$(package) Planning-as-a-service URL...";
+    }
+
+    async configurePlanner(previousConfiguration?: planner.PlannerConfiguration): Promise<planner.PlannerConfiguration | undefined> {
+        const existingValue = previousConfiguration?.url ?? "https://your-planning-as-a-service:5001/package";
+
+        const existingUri = Uri.parse(existingValue);
+        const indexOf = existingValue.indexOf(existingUri.authority);
+        const existingHostAndPort: [number, number] | undefined
+            = indexOf > -1 ? [indexOf, indexOf + existingUri.authority.length] : undefined;
+
+        const newPlannerUrl = await window.showInputBox({
+            prompt: "Enter /package URL",
+            placeHolder: `http://host:port/package`,
+            valueSelection: existingHostAndPort,
+            value: existingValue,
+            ignoreFocusOut: true
+        });
+
+        if (!newPlannerUrl) { return undefined; }
+
+        return this.createPlannerConfiguration(newPlannerUrl, previousConfiguration);
+    }
+
+    createPlannerConfiguration(newPlannerUrl: string, previousConfiguration?: planner.PlannerConfiguration): planner.PlannerConfiguration {
+        return {
+            kind: this.kind.kind,
+            url: newPlannerUrl,
+            title: newPlannerUrl,
+            canConfigure: true,
+            path: previousConfiguration?.path
+        };
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    showHelp(_output: OutputAdaptor): void {
+        throw new Error("Method not implemented."); // possibly show a page like https://paas-uom.org/docs/lama
+    }
+
+    /** Custom `Planner` implementation. */
+    createPlanner(configuration: planner.PlannerConfiguration, plannerInvocationOptions: planner.PlannerRunConfiguration): planner.Planner {
+        return PlanningAsAServiceProvider.createDefaultPlanner(configuration, plannerInvocationOptions, this);
+    }
+
+    /** Default `Planner` implementation. */
+    static createDefaultPlanner(configuration: planner.PlannerConfiguration, plannerInvocationOptions: planner.PlannerRunConfiguration, plannerProvider?: planner.PlannerProvider): planner.Planner {
+        if (!configuration.url) {
+            throw new Error(`Planner ${configuration.title} does not specify 'url'.`);
+        }
+
+        const providerConfiguration: planner.ProviderConfiguration = {
+            configuration: configuration,
+            provider: plannerProvider
+        };
+
+        return new PlannerPackagePreviewService(configuration.url, plannerInvocationOptions, providerConfiguration);
+    }
+
+    /**
+     * Checks if the server is responsive
+     * @param configuration planning service configuration
+     * @returns true of the service responds
+     */
+    async isServiceAccessible(configuration: planner.PlannerConfiguration): Promise<boolean> {
+        const url = configuration.url;
+        if (!url) {
+            throw new Error(`Expected planning configuration with the 'url' attribute.`);
+        }
+
+        return new Promise<boolean>(resolve => {
+            const req = http.request(new URL(url), { method: 'post' }, response => {
+                resolve((response.statusCode !== undefined) && (response.statusCode >= 400));
+            }).once("error", () => {
+                resolve(false);
+            });
+            req.write(JSON.stringify({ domain: "", problem: "" }));
+            req.end();
+        });
+    }
+}
+
+/** To support user configurations created using the 'preview' planner configuration. */
+export class PreviewPlanningAsAServiceProvider extends PlanningAsAServiceProvider {
+    get kind(): planner.PlannerKind {
+        return planner.WellKnownPlannerKind.PLANNING_AS_A_SERVICE_PREVIEW;
+    }
+}
+
 export class SolveServicePlannerProvider extends LongRunningPlannerProvider {
     get kind(): planner.PlannerKind {
         return planner.WellKnownPlannerKind.SERVICE_SYNC;
@@ -185,7 +280,7 @@ export class SolveServicePlannerProvider extends LongRunningPlannerProvider {
     }
 
     async configurePlanner(previousConfiguration?: planner.PlannerConfiguration): Promise<planner.PlannerConfiguration | undefined> {
-        const existingValue = previousConfiguration?.url ?? "http://solver.planning.domains/solve";
+        const existingValue = previousConfiguration?.url ?? "https://your-server/solve";
 
         const existingUri = Uri.parse(existingValue);
         const indexOf = existingValue.indexOf(existingUri.authority);
@@ -361,6 +456,96 @@ export class RequestServicePlannerProvider extends LongRunningPlannerProvider {
             },
             'configuration': {}
         };
+    }
+}
+
+// move to planner.WellKnownPlannerKind
+const SCHEDULER_SERVICE_SYNC = new planner.PlannerKind("scheduler");
+
+export class SchedulingServiceProvider extends LongRunningPlannerProvider {
+    get kind(): planner.PlannerKind {
+        return SCHEDULER_SERVICE_SYNC;
+    }
+    getNewPlannerLabel(): string {
+        return "$(calendar) Input a scheduling service URL...";
+    }
+
+    async configurePlanner(previousConfiguration?: planner.PlannerConfiguration): Promise<planner.PlannerConfiguration | undefined> {
+        const existingValue = previousConfiguration?.url ?? "http://localhost:8091/scheduling";
+
+        const existingUri = Uri.parse(existingValue);
+        const indexOf = existingValue.indexOf(existingUri.authority);
+        const existingHostAndPort: [number, number] | undefined
+            = indexOf > -1 ? [indexOf, indexOf + existingUri.authority.length] : undefined;
+
+        const newPlannerUrl = await window.showInputBox({
+            prompt: "Enter scheduling service URL",
+            placeHolder: `http://host:port/scheduling`,
+            valueSelection: existingHostAndPort,
+            value: existingValue,
+            ignoreFocusOut: true
+        });
+
+        if (!newPlannerUrl) { return undefined; }
+
+        return this.createPlannerConfiguration(newPlannerUrl, previousConfiguration);
+    }
+
+    createPlannerConfiguration(newPlannerUrl: string, previousConfiguration?: planner.PlannerConfiguration): planner.PlannerConfiguration {
+        return {
+            kind: this.kind.kind,
+            url: newPlannerUrl,
+            title: newPlannerUrl,
+            canConfigure: true,
+            path: previousConfiguration?.path
+        };
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    showHelp(_output: OutputAdaptor): void {
+        throw new Error("Method not implemented.");
+    }
+
+    /** Custom `Planner` implementation. */
+    createPlanner(configuration: planner.PlannerConfiguration, plannerInvocationOptions: planner.PlannerRunConfiguration): planner.Planner {
+        return SchedulingServiceProvider.createDefaultPlanner(configuration, plannerInvocationOptions, this);
+    }
+
+    /** Default `Planner` implementation. */
+    static createDefaultPlanner(configuration: planner.PlannerConfiguration, plannerInvocationOptions: planner.PlannerRunConfiguration, plannerProvider?: planner.PlannerProvider): planner.Planner {
+        if (!configuration.url) {
+            throw new Error(`Planner ${configuration.title} does not specify 'url'.`);
+        }
+
+        const providerConfiguration: planner.ProviderConfiguration = {
+            configuration: configuration,
+            provider: plannerProvider
+        };
+
+        return new SchedulingService(configuration.url, plannerInvocationOptions, providerConfiguration);
+    }
+
+    /**
+     * Checks if the server is responsive
+     * @param configuration planning service configuration
+     * @returns true of the service responds
+     */
+    async isServiceAccessible(configuration: planner.PlannerConfiguration): Promise<boolean> {
+        const url = configuration.url;
+        if (!url) {
+            throw new Error(`Expected planning configuration with the 'url' attribute.`);
+        }
+
+        return new Promise<boolean>(resolve => {
+            const req = http.request(new URL(url), { method: 'post' }, response => {
+                resolve((response.statusCode !== undefined) && (response.statusCode >= 400));
+            }).once("error", () => {
+                resolve(false);
+            });
+            // todo: different schema or multipart ....
+            req.write(JSON.stringify({ domain: "", problem: "" }));
+            req.end();
+        });
     }
 }
 
@@ -729,15 +914,112 @@ export class Lpg implements planner.PlannerProvider {
     }
 }
 
+export class NodeJsPlannerProvider implements planner.PlannerProvider {
+    get kind(): planner.PlannerKind {
+        return planner.WellKnownPlannerKind.NODE_JS_SCRIPT;
+    }
+    getNewPlannerLabel(): string {
+        return "$(file-code) Select a Node.js javascript file...";
+    }
 
-// const node: QuickPickItem = {
-//     label: "$(file-code) Select a Node.js file..."
-// };
+    async configurePlanner(previousConfiguration?: planner.PlannerConfiguration): Promise<planner.PlannerConfiguration | undefined> {
+        const filters =
+        {
+            'Javascript script': ['js', 'mjs', 'cjs'],
+        };
 
-// const python: QuickPickItem = {
-//     label: "$(file-text) Select a Python file..."
-// };
-// ${command:python.interpreterPath}
+        const defaultUri = previousConfiguration?.path ? Uri.file(previousConfiguration.path) : undefined;
+
+        const executableUri = await selectedFile(`Select Node.js script`, defaultUri, filters);
+        if (!executableUri) { return undefined; }
+
+        const newPlannerConfiguration: planner.PlannerConfiguration = {
+            kind: this.kind.kind,
+            canConfigure: true,
+            path: executableUri.fsPath,
+            title: path.basename(executableUri.fsPath)
+        };
+
+        return newPlannerConfiguration;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    showHelp(_output: OutputAdaptor): void {
+        // do nothing
+    }
+    async createPlanner(configuration: planner.PlannerConfiguration, plannerRunConfiguration: planner.PlannerRunConfiguration): Promise<planner.Planner> {
+        if (!configuration.path) {
+            throw new Error('Incomplete planner configuration. Mandatory attributes: path');
+        }
+
+        const providerConfiguration: planner.ProviderConfiguration = {
+            configuration: configuration,
+            provider: this
+        };
+        return new PlannerExecutable(`node ${utils.Util.q(configuration.path)}`,
+            plannerRunConfiguration as planner.PlannerExecutableRunConfiguration, providerConfiguration);
+    }
+}
+
+
+export class PythonPlannerProvider implements planner.PlannerProvider {
+    get kind(): planner.PlannerKind {
+        return planner.WellKnownPlannerKind.PYTHON_SCRIPT;
+    }
+    getNewPlannerLabel(): string {
+        return "$(file-text) Select a Python file...";
+    }
+
+    async configurePlanner(previousConfiguration?: planner.PlannerConfiguration): Promise<planner.PlannerConfiguration | undefined> {
+        const filters =
+        {
+            'Python script': ['py'],
+        };
+
+        const defaultUri = previousConfiguration?.path ? Uri.file(previousConfiguration.path) : undefined;
+
+        const executableUri = await selectedFile(`Select Python script`, defaultUri, filters);
+        if (!executableUri) { return undefined; }
+
+        const newPlannerConfiguration: planner.PlannerConfiguration = {
+            kind: this.kind.kind,
+            canConfigure: true,
+            path: executableUri.fsPath,
+            title: path.basename(executableUri.fsPath)
+        };
+
+        return newPlannerConfiguration;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    showHelp(_output: OutputAdaptor): void {
+        // do nothing
+    }
+    async createPlanner(configuration: planner.PlannerConfiguration, plannerRunConfiguration: planner.PlannerRunConfiguration): Promise<planner.Planner> {
+        if (!configuration.path) {
+            throw new Error('Incomplete planner configuration. Mandatory attributes: path');
+        }
+
+        const providerConfiguration: planner.ProviderConfiguration = {
+            configuration: configuration,
+            provider: this
+        };
+
+        let interpreter: string | undefined = undefined;
+        try {
+            interpreter = (await commands.executeCommand<string>("python.interpreterPath"));
+        } catch (err: unknown) {
+            console.log('Failed to get the python interpreter: ' + err);
+            interpreter = workspace.getConfiguration().get<string>("python.defaultInterpreterPath");
+        }
+
+        if (!interpreter || !await exists(interpreter)) {
+            interpreter = 'python';
+        }
+
+        return new PlannerExecutable(`${interpreter} ${utils.Util.q(configuration.path)}`,
+            plannerRunConfiguration as planner.PlannerExecutableRunConfiguration, providerConfiguration);
+    }
+}
+
 
 async function selectedFile(label: string, defaultUri?: Uri, filters?: { [name: string]: string[] }): Promise<Uri | undefined> {
     const selectedUris = await window.showOpenDialog({

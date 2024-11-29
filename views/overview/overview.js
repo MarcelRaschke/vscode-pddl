@@ -69,6 +69,7 @@ function initialize() {
  * @property {boolean} updateValAlert
  * @property {boolean} showEnableFormatterAlert
  * @property {boolean} showBracketColorizationAlert
+ * @property {boolean} showBracketPairGuidesAlert
  */
 
 /**
@@ -109,6 +110,7 @@ function updateConfiguration(message) {
         setStyleDisplay('updateValAlert', message.updateValAlert, "table-row");
         setStyleDisplay('enableFormatterAlert', message.showEnableFormatterAlert, "table-row");
         setStyleDisplay('enableBracketColorizationAlert', message.showBracketColorizationAlert, "table-row");
+        setStyleDisplay('enableBracketPairGuidesAlert', message.showBracketPairGuidesAlert, "table-row");
         setStyleDisplay('alertList', hasAnyChildrenToDisplay('table.alertList > tbody > tr.alert'), "block");
         updatePlannerOutputTarget(message.plannerOutputTarget);
         updateShowOverviewChanged(message.shouldShow);
@@ -262,7 +264,7 @@ function updatePlannersError(error) {
 
 /**
  * Add codicon based button to a cell.
- * @param {HTMLTableDataCellElement} td cell
+ * @param {HTMLTableCellElement} td cell
  * @param {string} imageName codicon image name
  * @param {string} tooltip tooltip
  * @param {(this: GlobalEventHandlers, ev: MouseEvent) => any} onclick onclick callback
@@ -341,6 +343,17 @@ function enableBracketColorization(forPddlOnly=false) {
     });    
 }
 
+function enableBracketPairGuidesForPddlOnly() {
+    enableBracketPairGuides(true);
+}
+
+function enableBracketPairGuides(forPddlOnly=false) {
+    postMessageToVsCode({
+        command: 'enableBracketPairGuides',
+        forPddlOnly: forPddlOnly
+    });    
+}
+
 /**
  * Converts a boolean to a display style
  * @param {string} elementId element ID
@@ -384,8 +397,8 @@ function showHint(hintText) {
  */
 function updatePlannerOutputTarget(value) {
     const radioButtons = document.getElementsByName("planner_output_target");
-    for (let i = 0; i < radioButtons.length; i++) {
-        radioButtons[i].checked = value === radioButtons[i].value;
+    for (const element of radioButtons) {
+        element.checked = value === element.value;
     }
 }
 
@@ -423,9 +436,9 @@ function onPlannerOutputTargetChanged() {
     let selectedValue = undefined;
 
     const radioButtons = document.getElementsByName("planner_output_target");
-    for (let i = 0; i < radioButtons.length; i++) {
-        if (radioButtons[i].checked === true) {
-            selectedValue = radioButtons[i].value;
+    for (const element of radioButtons) {
+        if (element.checked === true) {
+            selectedValue = element.value;
             break;
         }
     }
@@ -501,15 +514,15 @@ function populateWithTestData() {
                 scope: 0,
                 configuration: {
                     "kind": "service",
-                    "title": "http://solver.planning.domains/solve",
-                    "url": "http://solver.planning.domains/solve",
+                    "title": "https://solver.planning.domains/solve",
+                    "url": "https://solver.planning.domains/solve",
                     "canConfigure": false,
-                    "documentation": "http://solver.planning.domains"
+                    "documentation": "https://solver.planning.domains"
                 }
             }
         ],
         plannersConfigError: "Error in planner configuration xyz",
-        selectedPlanner: "http://solver.planning.domains/solve",
+        selectedPlanner: "https://solver.planning.domains/solve",
         workspaceFolders: [
             { name: 'wf1', uri: 'file://asdf/folder1'},
             { name: 'wf2', uri: 'file://asdf/folder2'},
@@ -526,6 +539,7 @@ function populateWithTestData() {
         updateValAlert: true,
         showEnableFormatterAlert: true,
         showBracketColorizationAlert: true,
+        showBracketPairGuidesAlert: true,
     });
     showHint('Did you know that <span class="keyboard">Ctrl</span> + <span class="keyboard">/</span> comments out the current line? Press it again to un-comment it.');
     showFeedbackRequest(true);

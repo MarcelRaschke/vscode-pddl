@@ -177,8 +177,7 @@ export class Planning implements planner.PlannerResponseHandler {
             let problemFileInfo: ProblemInfo | undefined;
             let domainFileInfo: DomainInfo | undefined;
 
-            for (let i = 0; i < selectedFiles.length; i++) {
-                const selectedFile = selectedFiles[i];
+            for (const selectedFile of selectedFiles) {
                 const selectedDoc = await workspace.openTextDocument(selectedFile);
 
                 const fileInfo = await this.codePddlWorkspace.upsertAndParseFile(selectedDoc);
@@ -488,8 +487,10 @@ export class Planning implements planner.PlannerResponseHandler {
                 //     authentication: authentication
                 // };
 
-                return this.codePddlWorkspace.pddlWorkspace.getPlannerRegistrar()
-                    .getPlannerProvider(new planner.PlannerKind(plannerConfiguration.kind))?.createPlanner?.(plannerConfiguration, plannerRunArguments) ??
+                const newPlanner = await this.codePddlWorkspace.pddlWorkspace.getPlannerRegistrar()
+                    .getPlannerProvider(new planner.PlannerKind(plannerConfiguration.kind))?.createPlanner?.(plannerConfiguration, plannerRunArguments);
+
+                return newPlanner ??
                     PlanningAsAServiceProvider.createDefaultPlanner(plannerConfiguration, plannerRunArguments);
             } else if (plannerConfiguration.url.endsWith("/solve")) {
                 options = await this.getPlannerLineOptions(plannerConfiguration, options);
@@ -500,8 +501,9 @@ export class Planning implements planner.PlannerResponseHandler {
                     authentication: authentication
                 };
 
-                return this.codePddlWorkspace.pddlWorkspace.getPlannerRegistrar()
-                    .getPlannerProvider(new planner.PlannerKind(plannerConfiguration.kind))?.createPlanner?.(plannerConfiguration, plannerRunConfiguration) ??
+                const newPlanner = await this.codePddlWorkspace.pddlWorkspace.getPlannerRegistrar()
+                    .getPlannerProvider(new planner.PlannerKind(plannerConfiguration.kind))?.createPlanner?.(plannerConfiguration, plannerRunConfiguration);
+                return newPlanner ??
                     SolveServicePlannerProvider.createDefaultPlanner(plannerConfiguration, plannerRunConfiguration);
             }
             else if (plannerConfiguration.url.endsWith("/request")) {
@@ -511,8 +513,21 @@ export class Planning implements planner.PlannerResponseHandler {
                 plannerRunConfiguration.authentication = authentication;
                 await this.addSearchDebuggerConfig(plannerRunConfiguration);
 
-                return this.codePddlWorkspace.pddlWorkspace.getPlannerRegistrar()
-                    .getPlannerProvider(new planner.PlannerKind(plannerConfiguration.kind))?.createPlanner?.(plannerConfiguration, plannerRunConfiguration) ??
+                const newPlanner = await this.codePddlWorkspace.pddlWorkspace.getPlannerRegistrar()
+                    .getPlannerProvider(new planner.PlannerKind(plannerConfiguration.kind))?.createPlanner?.(plannerConfiguration, plannerRunConfiguration);
+                
+                return newPlanner ??
+                    RequestServicePlannerProvider.createDefaultPlanner(plannerConfiguration, plannerRunConfiguration);
+            }
+            else if (plannerConfiguration.kind === 'scheduler') {
+                const plannerRunConfiguration = await PlannerConfigurationSelector.loadConfiguration(PlannerConfigurationSelector.DEFAULT, PlannerAsyncService.DEFAULT_TIMEOUT) as AsyncServiceConfiguration;
+                plannerRunConfiguration.authentication = authentication;
+                // await this.addSearchDebuggerConfig(plannerRunConfiguration);
+
+                const newPlanner = await this.codePddlWorkspace.pddlWorkspace.getPlannerRegistrar()
+                    .getPlannerProvider(new planner.PlannerKind(plannerConfiguration.kind))?.createPlanner?.(plannerConfiguration, plannerRunConfiguration);
+                
+                return newPlanner ??
                     RequestServicePlannerProvider.createDefaultPlanner(plannerConfiguration, plannerRunConfiguration);
             }
             else {
@@ -534,8 +549,10 @@ export class Planning implements planner.PlannerResponseHandler {
                 configuration: plannerConfiguration
             };
 
-            return this.codePddlWorkspace.pddlWorkspace.getPlannerRegistrar()
-                .getPlannerProvider(new planner.PlannerKind(plannerConfiguration.kind))?.createPlanner?.(plannerConfiguration, plannerRunConfiguration) ??
+            const newPlanner = await this.codePddlWorkspace.pddlWorkspace.getPlannerRegistrar()
+                .getPlannerProvider(new planner.PlannerKind(plannerConfiguration.kind))?.createPlanner?.(plannerConfiguration, plannerRunConfiguration);
+
+            return newPlanner ??
                 new PlannerExecutable(plannerConfiguration.path, plannerRunConfiguration, providerConfiguration);
         } else {
             throw new Error(`Planner configuration must define at least one of the properties 'url' or 'path': ${plannerConfiguration.title}`);
